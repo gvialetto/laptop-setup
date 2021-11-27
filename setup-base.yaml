@@ -1,0 +1,104 @@
+---
+  - name: "Setup local Fedora 35 system (root)"
+    hosts: localhost
+    connection: local 
+    tasks:  
+
+    - ansible.builtin.fail: 
+        msg: "'laptop_hostname' variable is required to run this playbook!"
+      when: laptop_hostname is not defined
+
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{laptop_hostname}}"
+        use: systemd
+
+    - name: Fixup DNF config
+      ansible.builtin.lineinfile:
+        dest: /etc/dnf/dnf.conf
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - { regexp: '^fastestmirror=', line: 'fastestmirror=True' }
+        - { regexp: '^max_parallel_downloads=', line: 'max_parallel_downloads=10' }
+        - { regexp: '^deltarpm=', line: 'deltarpm=True' }
+
+    - name: Fixup sysctl config for inotify watches
+      sysctl:
+        name: 'fs.inotify.max_user_watches'
+        value: '524288'
+
+    - name: Install rpm fusion repo 
+      ansible.builtin.dnf:
+        name: 
+            - 'https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-35.noarch.rpm'
+            - 'https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-35.noarch.rpm'
+        disable_gpg_check: yes
+        state: present
+
+    - name: Set up vs code repo
+      ansible.builtin.yum_repository:
+        name: vscode
+        description: 'Visual Studio Code repository'
+        baseurl: https://packages.microsoft.com/yumrepos/vscode
+        gpgcheck: yes
+        gpgkey: https://packages.microsoft.com/keys/microsoft.asc
+
+    - name: Remove unwanted packages 
+      dnf:
+        name: 
+            - PackageKit-command-not-found
+            - PackageKit-gstreamer-plugin
+            - 'libreoffice-*'
+        state: absent
+
+    - name: Install packages 
+      ansible.builtin.dnf:
+        name: 
+            - profile-sync-daemon
+            - gnome-extensions-app
+            - gnome-shell-extension-user-theme
+            - gnome-shell-extension-pop-shell
+            - gnome-tweaks
+            - dconf-editor
+            - neovim
+            - zsh
+            - exa
+            - fzf
+            - ripgrep
+            - fd-find
+            - toolbox
+            - bpytop
+            - kubernetes-client
+            - arc-theme
+            - fira-code-fonts 
+            - "mozilla-fira*"
+            - "google-roboto*"
+            - numix-icon-theme-circle
+            - git-lfs
+            - code
+            - mpv
+            - yubikey-manager
+            - stow
+            - kitty
+        state: present
+
+    - name: Allow users to run profile-sync-daemon in overlayfs mode
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers.d/psd-overlay-helper
+        state: present
+        create: yes
+        regexp: "^%wheel ALL=(ALL) NOPASSWD: /usr/bin/psd-overlay-helper"
+        line: "%wheel ALL=(ALL) NOPASSWD: /usr/bin/psd-overlay-helper"
+        validate: /usr/sbin/visudo -cf %s
+        
+    - name: Install common media codecs
+      ansible.builtin.dnf:
+        name: 
+            - gstreamer1-plugins-bad-* 
+            - gstreamer1-plugins-good-* 
+            - gstreamer1-plugins-base
+            - gstreamer1-plugin-openh264 
+            - gstreamer1-libav
+        exclude: gstreamer1-plugins-bad-free-devel
+        state: present

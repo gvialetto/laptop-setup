@@ -1,0 +1,113 @@
+---
+- name: "Setup local Fedora 35 system (user)"
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Add the flathub repository remote to the user installation
+      flatpak_remote:
+        name: flathub
+        state: present
+        flatpakrepo_url: https://dl.flathub.org/repo/flathub.flatpakrepo
+        method: user
+
+    - name: Install flatpaks (flathub)
+      community.general.flatpak:
+        remote: flathub
+        method: user
+        name:
+          - com.github.tchx84.Flatseal
+          - com.github.rafostar.Clapper
+          - io.github.seadve.Kooha
+          - org.gnome.gitlab.somas.Apostrophe
+          - com.github.johnfactotum.Foliate
+
+    - name: Disable Gnome software download update
+      community.general.dconf:
+        key: "/org/gnome/software/download-updates"
+        value: "false"
+        state: present
+
+    - name: Enable extensions
+      community.general.dconf:
+        key: "/org/gnome/shell/enabled-extensions"
+        value: "['user-theme@gnome-shell-extensions.gcampax.github.com', 'pop-shell@system76.com']"
+
+    - name: Set up base pop-shell options
+      community.general.dconf:
+        key: "{{item.key}}"
+        value: "{{item.val}}"
+      loop:
+        - {key: "/org/gnome/shell/extensions/pop-shell/active-hint", val: "true"}
+        - {key: "/org/gnome/shell/extensions/pop-shell/smart-gaps", val: "true"}
+
+    - name: Set up gnome theme
+      community.general.dconf:
+        key: "{{item.key}}"
+        value: "{{item.val}}"
+      loop:
+        - {key: "/org/gnome/desktop/interface/gtk-theme", val: "'Arc-Darker-solid'"}
+        - {key: "/org/gnome/desktop/interface/icon-theme", val: "'Numix-Circle'"}
+        - {key: "/org/gnome/shell/extensions/user-theme/name", val: "'Arc-Dark'"}
+        - {key: "/org/gnome/desktop/interface/monospace-font-name", val: "'Fira Code 12'"}
+        - {key: "/org/gnome/desktop/interface/document-font-name", val: "'Roboto Slab 11'"}
+        - {key: "/org/gnome/desktop/interface/font-name", val: "'Fira Sans Semi-Light 11'"}
+        - {
+            key: "/org/gnome/desktop/wm/preferences/titlebar-font", 
+            val: "'Fira Sans Semi-Bold 10'"
+          }
+
+    - name: Disable hot corners
+      community.general.dconf:
+        key: "/org/gnome/desktop/interface/enable-hot-corners"
+        value: "false"
+
+    - name: Disable desktop animations
+      community.general.dconf:
+        key: "/org/gnome/desktop/interface/enable-animations"
+        value: "false"
+
+    - name: Enable night light
+      community.general.dconf:
+        key: "/org/gnome/settings-daemon/plugins/color/night-light-enabled"
+        value: "true"
+
+    - name: Restore classic gnome background
+      community.general.dconf:
+        key: "{{item}}"
+        value: "'file:///usr/share/backgrounds/gnome/adwaita-timed.xml'"
+      loop:
+        - "/org/gnome/desktop/background/picture-uri"
+        - "/org/gnome/desktop/screensaver/picture-uri"
+
+    - name: Set caps lock to be another CTRL key
+      community.general.dconf:
+        key: "/org/gnome/desktop/input-sources/xkb-options"
+        value: "['caps:ctrl_modifier']"
+
+    - name: Enable tap to click
+      community.general.dconf:
+        key: "/org/gnome/desktop/peripherals/touchpad/tap-to-click"
+        value: "true"
+
+    - name: Set up weather applet in gnome shell
+      community.general.dconf:
+        key: "/org/gnome/shell/weather/automatic-location"
+        value: "true"
+
+    - name: Create folder for psd configuration
+      ansible.builtin.file:
+        path: "{{ansible_env.HOME}}/.config/psd"
+        state: directory
+        recurse: yes
+
+    - name: Create base psd configuration
+      ansible.builtin.copy:
+        src: config/psd.conf
+        dest: "{{ansible_env.HOME}}/.config/psd/psd.conf"
+
+    - name: Enables and starts psd for the user
+      ansible.builtin.systemd:
+        name: psd
+        scope: user
+        state: started 
+        enabled: yes
